@@ -1753,9 +1753,9 @@ class ReformerModelWithLMHead(ReformerPreTrainedModel):
             loss = loss_fct(shift_logits.view(-1, self.config.vocab_size), shift_labels.view(-1))
             outputs = (loss,) + outputs
 
-        if masked_lm_labels is not None:
+        elif masked_lm_labels is not None:
             loss_fct = CrossEntropyLoss()
-            masked_lm_loss = loss_fct(prediction_scores.view(-1, self.config.vocab_size), masked_lm_labels.view(-1))
+            masked_lm_loss = loss_fct(logits.view(-1, self.config.vocab_size), masked_lm_labels.view(-1))
             outputs = (masked_lm_loss,) + outputs
 
         return outputs  # (lm_loss), lm_logits, (hidden_states), (attentions)
