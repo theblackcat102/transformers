@@ -1686,6 +1686,7 @@ class ReformerModelWithLMHead(ReformerPreTrainedModel):
         inputs_embeds=None,
         num_hashes=None,
         labels=None,
+        masked_lm_labels=None,
         do_output_hidden_states=False,
         do_output_attentions=False,
     ):
@@ -1751,6 +1752,12 @@ class ReformerModelWithLMHead(ReformerPreTrainedModel):
             loss_fct = CrossEntropyLoss()
             loss = loss_fct(shift_logits.view(-1, self.config.vocab_size), shift_labels.view(-1))
             outputs = (loss,) + outputs
+
+        if masked_lm_labels is not None:
+            loss_fct = CrossEntropyLoss()
+            masked_lm_loss = loss_fct(prediction_scores.view(-1, self.config.vocab_size), masked_lm_labels.view(-1))
+            outputs = (masked_lm_loss,) + outputs
+
         return outputs  # (lm_loss), lm_logits, (hidden_states), (attentions)
 
     def prepare_inputs_for_generation(self, input_ids, past, **kwargs):
