@@ -183,7 +183,6 @@ class Trainer:
             self.train_dataset,
             batch_size=self.args.train_batch_size,
             sampler=train_sampler,
-            num_workers=8,
             collate_fn=self.data_collator.collate_batch,
         )
 
