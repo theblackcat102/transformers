@@ -154,10 +154,10 @@ class Trainer:
             logger.warning(
                 "You are instantiating a Trainer but Tensorboard is not installed. You should consider installing it."
             )
-        if not is_wandb_available():
-            logger.info(
-                "You are instantiating a Trainer but wandb is not installed. Install it to use Weights & Biases logging."
-            )
+        # if not is_wandb_available():
+        #     logger.info(
+        #         "You are instantiating a Trainer but wandb is not installed. Install it to use Weights & Biases logging."
+        #     )
         set_seed(self.args.seed)
         # Create output directory if needed
         if self.is_local_master():
