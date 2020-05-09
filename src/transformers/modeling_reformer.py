@@ -1689,6 +1689,7 @@ class ReformerModelWithLMHead(ReformerPreTrainedModel):
         masked_lm_labels=None,
         do_output_hidden_states=False,
         do_output_attentions=False,
+        token_type_ids=None,
     ):
         r"""
         labels (:obj:`torch.LongTensor` of shape :obj:`(batch_size,)`, `optional`, defaults to :obj:`None`):

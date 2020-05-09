@@ -18,11 +18,14 @@
 import logging
 import os
 from shutil import copyfile
-
+from typing import List, Optional
+import unicodedata
 from .tokenization_utils import PreTrainedTokenizer
 
 
 logger = logging.getLogger(__name__)
+
+VOCAB_FILES_NAMES = {"vocab_file": "spiece.model"}
 
 SPIECE_UNDERLINE = "▁"
 
@@ -85,13 +88,16 @@ class ReformerTokenizer(PreTrainedTokenizer):
     def __init__(
         self,
         vocab_file,
-        bos_token="<s>",
-        eos_token="</s>",
-        sep_token="</s>",
-        cls_token="<s>",
+        do_lower_case=False,
+        remove_space=True,
+        keep_accents=False,
+        bos_token="[cls]",
+        eos_token="[sep]",
         unk_token="<unk>",
+        sep_token="[sep]",
         pad_token="<pad>",
-        mask_token="<mask>",
+        cls_token="[cls]",
+        mask_token="[mask]",
         additional_special_tokens=[],
         **kwargs
     ):
@@ -116,9 +122,14 @@ class ReformerTokenizer(PreTrainedTokenizer):
             )
             raise
 
+        self.do_lower_case = do_lower_case
+        self.remove_space = remove_space
+        self.keep_accents = keep_accents
         self.vocab_file = vocab_file
         self.sp_model = spm.SentencePieceProcessor()
         self.sp_model.Load(vocab_file)
+
+        # self.backend_tokenizer.add_special_tokens([kwargs["mask_token"]])
 
     @property
     def vocab_size(self):
@@ -147,15 +158,45 @@ class ReformerTokenizer(PreTrainedTokenizer):
         self.sp_model = spm.SentencePieceProcessor()
         self.sp_model.Load(self.vocab_file)
 
+    def preprocess_text(self, inputs):
+        if self.remove_space:
+            outputs = " ".join(inputs.strip().split())
+        else:
+            outputs = inputs
+        outputs = outputs.replace("``", '"').replace("''", '"')
+
+        if not self.keep_accents:
+            outputs = unicodedata.normalize("NFKD", outputs)
+            outputs = "".join([c for c in outputs if not unicodedata.combining(c)])
+        if self.do_lower_case:
+            outputs = outputs.lower()
+
+        return outputs
+
     def _tokenize(self, text, sample=False):
         """ Take as input a string and return a list of strings (tokens) for words/sub-words
         """
+        text = self.preprocess_text(text)
+
         if not sample:
             pieces = self.sp_model.EncodeAsPieces(text)
         else:
             pieces = self.sp_model.SampleEncodeAsPieces(text, 64, 0.1)
-        return pieces
+        new_pieces = []
+        for piece in pieces:
+            if len(piece) > 1 and piece[-1] == str(",") and piece[-2].isdigit():
+                cur_pieces = self.sp_model.EncodeAsPieces(piece[:-1].replace(SPIECE_UNDERLINE, ""))
+                if piece[0] != SPIECE_UNDERLINE and cur_pieces[0][0] == SPIECE_UNDERLINE:
+                    if len(cur_pieces[0]) == 1:
+                        cur_pieces = cur_pieces[1:]
+                    else:
+                        cur_pieces[0] = cur_pieces[0][1:]
+                cur_pieces.append(piece[-1])
+                new_pieces.extend(cur_pieces)
+            else:
+                new_pieces.append(piece)
 
+        return new_pieces
     def _convert_token_to_id(self, token):
         """ Converts a token (str) in an id using the vocab. """
         return self.sp_model.piece_to_id(token)
@@ -184,3 +225,29 @@ class ReformerTokenizer(PreTrainedTokenizer):
             copyfile(self.vocab_file, out_vocab_file)
 
         return (out_vocab_file,)
+
+    def build_inputs_with_special_tokens(
+        self, token_ids_0: List[int], token_ids_1: Optional[List[int]] = None
+    ) -> List[int]:
+        """
+        Build model inputs from a sequence or a pair of sequence for sequence classification tasks
+        by concatenating and adding special tokens.
+        An ALBERT sequence has the following format:
+
+        - single sequence: ``[CLS] X [SEP]``
+        - pair of sequences: ``[CLS] A [SEP] B [SEP]``
+
+        Args:
+            token_ids_0 (:obj:`List[int]`):
+                List of IDs to which the special tokens will be added
+            token_ids_1 (:obj:`List[int]`, `optional`, defaults to :obj:`None`):
+                Optional second list of IDs for sequence pairs.
+
+        Returns:
+            :obj:`List[int]`: list of `input IDs <../glossary.html#input-ids>`__ with the appropriate special tokens.
+        """
+        sep = [self.sep_token_id]
+        cls = [self.cls_token_id]
+        if token_ids_1 is None:
+            return cls + token_ids_0 + sep
+        return cls + token_ids_0 + sep + token_ids_1 + sep
